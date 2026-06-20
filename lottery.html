@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>抽選ページ | MyAiDevelopment</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --panel: #1e293b;
+    --panel-2: #334155;
+    --accent: #38bdf8;
+    --accent-2: #f472b6;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --win: #fde047;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN",
+                 "Yu Gothic", Meiryo, sans-serif;
+    background: radial-gradient(1200px 600px at 50% -10%, #1e293b 0%, var(--bg) 60%);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  .wrap {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 24px 16px 64px;
+  }
+  header { text-align: center; margin-bottom: 24px; }
+  h1 {
+    font-size: 1.8rem;
+    margin: 0 0 4px;
+    letter-spacing: 0.05em;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .sub { color: var(--muted); font-size: 0.85rem; }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--panel-2);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+  }
+  label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 8px; }
+  textarea {
+    width: 100%;
+    min-height: 140px;
+    resize: vertical;
+    background: #0b1220;
+    color: var(--text);
+    border: 1px solid var(--panel-2);
+    border-radius: 10px;
+    padding: 12px;
+    font-size: 1rem;
+    line-height: 1.6;
+    font-family: inherit;
+  }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
+  .field { display: flex; align-items: center; gap: 8px; }
+  input[type="number"] {
+    width: 80px;
+    background: #0b1220;
+    color: var(--text);
+    border: 1px solid var(--panel-2);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 1rem;
+  }
+  .checkbox { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 0.9rem; }
+  button {
+    border: none;
+    border-radius: 10px;
+    padding: 12px 20px;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.05s ease, opacity 0.2s ease;
+  }
+  button:active { transform: scale(0.97); }
+  .btn-primary {
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    color: #0b1220;
+    flex: 1;
+    min-width: 160px;
+  }
+  .btn-ghost {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--panel-2);
+  }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .result {
+    text-align: center;
+    min-height: 60px;
+  }
+  .result h2 { margin: 0 0 16px; font-size: 1rem; color: var(--muted); font-weight: 600; }
+  .winner {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: var(--win);
+    padding: 10px 4px;
+    animation: pop 0.4s ease;
+  }
+  @keyframes pop {
+    0% { transform: scale(0.6); opacity: 0; }
+    60% { transform: scale(1.12); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .rolling { color: var(--accent); font-weight: 800; font-size: 1.6rem; }
+  .count { color: var(--muted); font-size: 0.85rem; margin-top: 8px; }
+  footer { text-align: center; color: var(--muted); font-size: 0.75rem; margin-top: 32px; }
+  footer a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>抽選ページ</h1>
+    <div class="sub">参加者を入力して当選者を抽選します</div>
+  </header>
+
+  <div class="card">
+    <label for="entries">参加者（1行に1名）</label>
+    <textarea id="entries" placeholder="山田太郎&#10;佐藤花子&#10;鈴木一郎"></textarea>
+    <div class="count" id="entryCount">参加者: 0 名</div>
+
+    <div class="row">
+      <div class="field">
+        <label for="winners" style="margin:0;">当選数</label>
+        <input type="number" id="winners" value="1" min="1">
+      </div>
+      <label class="checkbox">
+        <input type="checkbox" id="allowDup"> 重複当選を許可
+      </label>
+    </div>
+
+    <div class="row">
+      <button class="btn-primary" id="drawBtn">抽選する</button>
+      <button class="btn-ghost" id="clearBtn">クリア</button>
+    </div>
+  </div>
+
+  <div class="card result">
+    <h2>抽選結果</h2>
+    <div id="output" style="color:var(--muted);">「抽選する」を押してください</div>
+  </div>
+
+  <footer>
+    MyAiDevelopment ·
+    <a href="https://github.com/shiroukaieda/MyAiDevelopment-data">data repository</a>
+  </footer>
+</div>
+
+<script>
+  const entriesEl = document.getElementById('entries');
+  const countEl = document.getElementById('entryCount');
+  const winnersEl = document.getElementById('winners');
+  const allowDupEl = document.getElementById('allowDup');
+  const drawBtn = document.getElementById('drawBtn');
+  const clearBtn = document.getElementById('clearBtn');
+  const output = document.getElementById('output');
+
+  function getEntries() {
+    return entriesEl.value
+      .split('\n')
+      .map(s => s.trim())
+      .filter(s => s.length > 0);
+  }
+
+  function updateCount() {
+    countEl.textContent = '参加者: ' + getEntries().length + ' 名';
+  }
+  entriesEl.addEventListener('input', updateCount);
+
+  // 暗号学的に偏りの少ない乱数で 0..max-1 を返す
+  function randInt(max) {
+    if (window.crypto && window.crypto.getRandomValues) {
+      const range = 0x100000000;
+      const limit = range - (range % max);
+      const buf = new Uint32Array(1);
+      let v;
+      do { window.crypto.getRandomValues(buf); v = buf[0]; } while (v >= limit);
+      return v % max;
+    }
+    return Math.floor(Math.random() * max);
+  }
+
+  function pickWinners(pool, n, allowDup) {
+    const result = [];
+    if (allowDup) {
+      for (let i = 0; i < n; i++) result.push(pool[randInt(pool.length)]);
+    } else {
+      const copy = pool.slice();
+      for (let i = 0; i < n && copy.length > 0; i++) {
+        const idx = randInt(copy.length);
+        result.push(copy.splice(idx, 1)[0]);
+      }
+    }
+    return result;
+  }
+
+  let rolling = null;
+
+  function draw() {
+    const entries = getEntries();
+    const allowDup = allowDupEl.checked;
+    let n = parseInt(winnersEl.value, 10);
+    if (isNaN(n) || n < 1) n = 1;
+
+    if (entries.length === 0) {
+      output.innerHTML = '<span style="color:var(--accent-2)">参加者を入力してください</span>';
+      return;
+    }
+    if (!allowDup && n > entries.length) {
+      n = entries.length;
+      winnersEl.value = n;
+    }
+
+    drawBtn.disabled = true;
+    if (rolling) clearInterval(rolling);
+
+    // ルーレット演出
+    let ticks = 0;
+    const totalTicks = 18;
+    rolling = setInterval(() => {
+      const r = entries[randInt(entries.length)];
+      output.innerHTML = '<div class="rolling">' + escapeHtml(r) + '</div>';
+      ticks++;
+      if (ticks >= totalTicks) {
+        clearInterval(rolling);
+        rolling = null;
+        const winners = pickWinners(entries, n, allowDup);
+        output.innerHTML = winners
+          .map(w => '<div class="winner">🎉 ' + escapeHtml(w) + '</div>')
+          .join('');
+        drawBtn.disabled = false;
+      }
+    }, 70);
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, c => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[c]));
+  }
+
+  drawBtn.addEventListener('click', draw);
+  clearBtn.addEventListener('click', () => {
+    entriesEl.value = '';
+    output.innerHTML = '<span style="color:var(--muted)">「抽選する」を押してください</span>';
+    updateCount();
+  });
+
+  updateCount();
+</script>
+</body>
+</html>
