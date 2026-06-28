@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>もってけドロボー｜くじ</title>
+<style>
+  :root { --red:#C8102E; --bg:#f7f4f0; }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; background:var(--bg);
+    font-family:'Helvetica Neue',Arial,'Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;
+    color:#222;
+  }
+  .wrap { max-width:480px; margin:0 auto; min-height:100vh; background:var(--bg); }
+  .hd { background:var(--red); padding:28px 24px; text-align:center; }
+  .hd .sub { color:#fff; font-size:11px; letter-spacing:.15em; margin-bottom:6px; }
+  .hd .ttl { color:#fff; font-size:24px; font-weight:900; letter-spacing:.05em; }
+  .card { background:#fff; margin:0; padding:32px 24px; text-align:center; }
+  .lead { font-size:16px; font-weight:700; margin:0 0 8px; }
+  .desc { font-size:14px; color:#555; line-height:1.7; margin:0 0 24px; }
+
+  /* 抽選ボタン / スクラッチ */
+  .draw-btn {
+    display:inline-block; background:var(--red); color:#fff; border:0;
+    padding:18px 48px; border-radius:12px; font-size:18px; font-weight:700;
+    cursor:pointer; box-shadow:0 6px 16px rgba(200,16,46,.25);
+    transition:transform .1s;
+  }
+  .draw-btn:active { transform:scale(.97); }
+  .draw-btn:disabled { background:#ccc; box-shadow:none; cursor:default; }
+
+  .spinner {
+    width:64px; height:64px; margin:24px auto; border-radius:50%;
+    border:6px solid #f0e0e3; border-top-color:var(--red);
+    animation:spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  /* 結果 */
+  .result { display:none; padding:8px 0 0; }
+  .result.show { display:block; animation:pop .4s ease; }
+  @keyframes pop { 0%{transform:scale(.8);opacity:0} 100%{transform:scale(1);opacity:1} }
+  .badge { font-size:13px; letter-spacing:.1em; color:#999; margin-bottom:8px; }
+  .win .prize { font-size:26px; font-weight:900; color:var(--red); line-height:1.4; margin:8px 0 16px; }
+  .lose .msg  { font-size:26px; font-weight:900; color:#666; margin:8px 0 16px; }
+  .note {
+    background:#fff8f8; border-radius:8px; padding:14px; font-size:12px;
+    color:var(--red); font-weight:700; margin-top:8px;
+  }
+  .err { color:#b00; font-size:14px; font-weight:700; line-height:1.7; }
+  .ft { padding:20px 24px; text-align:center; }
+  .ft p { font-size:11px; color:#aaa; margin:0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hd">
+    <div class="sub">もってけ</div>
+    <div class="ttl">ドロボー</div>
+  </div>
+
+  <div class="card">
+    <!-- 読み込み中 -->
+    <div id="loading">
+      <div class="spinner"></div>
+      <p class="desc">確認しています…</p>
+    </div>
+
+    <!-- くじを引く前 -->
+    <div id="ready" style="display:none">
+      <p class="lead">くじを引いてください！</p>
+      <p class="desc">ボタンを押すと結果が表示されます。<br>この抽選は1回のみ有効です。</p>
+      <button id="drawBtn" class="draw-btn">くじを引く 🎯</button>
+    </div>
+
+    <!-- 抽選中 -->
+    <div id="drawing" style="display:none">
+      <div class="spinner"></div>
+      <p class="desc">抽選中…</p>
+    </div>
+
+    <!-- 結果: 当選 -->
+    <div id="win" class="result win">
+      <div class="badge">🎉 おめでとうございます</div>
+      <div class="prize" id="prizeName"></div>
+      <div class="note">次回ご来店時に、この画面をスタッフへお見せください。</div>
+    </div>
+
+    <!-- 結果: ハズレ -->
+    <div id="lose" class="result lose">
+      <div class="badge">結果</div>
+      <div class="msg">ハズレ…🙇</div>
+      <p class="desc">またのご応募をお待ちしています！</p>
+    </div>
+
+    <!-- エラー -->
+    <div id="error" class="result">
+      <p class="err" id="errMsg"></p>
+    </div>
+  </div>
+
+  <div class="ft"><p>当選された方は次回ご来店時にスタッフへお申し付けください</p></div>
+</div>
+
+<script>
+// ============================================================
+//  設定：デプロイしたウェブアプリ（Apps Script）の URL をここに入れる
+//  例: https://script.google.com/macros/s/XXXXXXXX/exec
+// ============================================================
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwclIrRk9DxpEUb0scjKGswM_GIBcYl4q_OkAdZw2fz_1wEPMPTmT38GFTUaPlqo9vq/exec';
+
+const $ = id => document.getElementById(id);
+const params = new URLSearchParams(location.search);
+const token = params.get('t');
+
+function show(id) {
+  ['loading','ready','drawing'].forEach(x => $(x).style.display = 'none');
+  ['win','lose','error'].forEach(x => $(x).classList.remove('show'));
+  if (['win','lose','error'].includes(id)) $(id).classList.add('show');
+  else $(id).style.display = 'block';
+}
+
+function showError(msg) { $('errMsg').textContent = msg; show('error'); }
+
+const ERR = {
+  no_token: 'トークンがありません。メールのリンクから開いてください。',
+  invalid:  'このくじURLは無効です。',
+  used:     'このくじは既に使用済みです。1回のみ有効です。',
+  network:  '通信エラーが発生しました。時間をおいて再度お試しください。',
+  config:   'セットアップが未完了です（ウェブアプリURL未設定）。'
+};
+
+// ウェブアプリの doGet を fetch(GET) で呼び、JSONを取得する。
+function callApi(action) {
+  const url = APPS_SCRIPT_URL + '?token=' + encodeURIComponent(token) +
+              (action ? '&action=' + action : '');
+  return fetch(url).then(r => r.json());
+}
+
+// 1) 入場時にトークンの有効性を確認
+async function init() {
+  if (!token) return showError(ERR.no_token);
+  if (APPS_SCRIPT_URL.indexOf('PASTE_') === 0) return showError(ERR.config);
+  try {
+    const data = await callApi(null);          // action なし = 検証のみ
+    if (data.error) return showError(ERR[data.error] || ERR.invalid);
+    if (data.ok && data.valid) show('ready');   // 引ける状態へ
+    else showError(ERR.invalid);
+  } catch (e) { showError(ERR.network); }
+}
+
+// 2) 「くじを引く」→ action=use で消費し、結果を表示
+$('drawBtn').addEventListener('click', async () => {
+  $('drawBtn').disabled = true;
+  show('drawing');
+  try {
+    const data = await callApi('use');         // ここで used=true になる
+    if (data.error) return showError(ERR[data.error] || ERR.invalid);
+    await new Promise(r => setTimeout(r, 1200)); // 演出
+    if (data.win) { $('prizeName').textContent = data.prize; show('win'); }
+    else show('lose');
+  } catch (e) { showError(ERR.network); }
+});
+
+init();
+</script>
+</body>
+</html>
